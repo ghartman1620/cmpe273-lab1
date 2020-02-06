@@ -1,7 +1,6 @@
 import glob
 import uuid  # for temp filename generation
 import os
-import asyncio
 
 def sort_each_input_file_into_temp_files(input_file_list):
     sorted_input_files = []
@@ -69,17 +68,28 @@ def delete_temp_file(filename):
 def sort(input_file_list):
     current_sorted_sublists = sort_each_input_file_into_temp_files(input_file_list)
     while len(current_sorted_sublists) > 1:
-        filename1 = current_sorted_sublists.pop()
-        filename2 = current_sorted_sublists.pop()
-        current_sorted_sublists.append(sort_two_sorted_files_into_one(filename1, filename2))
-        delete_temp_file(filename1)
-        delete_temp_file(filename2)
+        merge_two_lists_and_write_results(current_sorted_sublists)
     save_final_results(current_sorted_sublists.pop())
+
+def merge_two_lists_and_write_results(current_sorted_sublists):
+    filename1, filename2 = get_two_files(current_sorted_sublists)
+    new_merged_file = sort_two_sorted_files_into_one(filename1, filename2)
+    add_merged_results_to_list(current_sorted_sublists, new_merged_file)
+    delete_temp_file(filename1)
+    delete_temp_file(filename2)
+
+def get_two_files(current_sorted_sublists):
+    filename1 = current_sorted_sublists.pop()
+    filename2 = current_sorted_sublists.pop()
+    return filename1, filename2
+
+def add_merged_results_to_list(current_sorted_sublists, filename):
+    current_sorted_sublists.append(filename)
 
 def save_final_results(final_results_filename):
     final_numbers = read_numbers_from_file(final_results_filename)
     delete_temp_file(final_results_filename)
-    write_numbers_to_file("async_sorted.txt", final_numbers)
+    write_numbers_to_file("sorted.txt", final_numbers)
 
 # https://stackoverflow.com/questions/18262293/how-to-open-every-file-in-a-folder
 input_files = glob.glob("input/unsorted_*.txt")
