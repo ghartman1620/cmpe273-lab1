@@ -15,8 +15,8 @@ def sort_input_file_and_get_sorted_filename(filename):
     write_numbers_to_file(sorted_filename, numbers)
     return sorted_filename
 
-def write_numbers_to_file(sorted_filename, numbers):
-    with open(sorted_filename, "w") as o:
+def write_numbers_to_file(filename, numbers):
+    with open(filename, "w") as o:
         lines = list(map(num_to_str_with_newline, numbers))
         o.writelines(lines)
 
@@ -36,7 +36,7 @@ def merge(list1, list2):
     j = 0
     merged_sorted_list = []
     while (i < len(list1) and j < len(list2)):
-        if (list1[i] > list2[i]):
+        if (list1[i] < list2[j]):
             merged_sorted_list.append(list1[i])
             i += 1
         else:
@@ -67,19 +67,29 @@ def delete_temp_file(filename):
 
 def sort(input_file_list):
     current_sorted_sublists = sort_each_input_file_into_temp_files(input_file_list)
-    print(current_sorted_sublists)
     while len(current_sorted_sublists) > 1:
-        filename1 = current_sorted_sublists.pop()
-        filename2 = current_sorted_sublists.pop()
-        current_sorted_sublists.append(sort_two_sorted_files_into_one(filename1, filename2))
-        delete_temp_file(filename1)
-        delete_temp_file(filename2)
-    
-    final_numbers = read_numbers_from_file(current_sorted_sublists.pop())
-    print(final_numbers)
-    print(len(final_numbers))
+        merge_two_lists_and_write_results(current_sorted_sublists)
+    save_final_results(current_sorted_sublists.pop())
 
-        
+def merge_two_lists_and_write_results(current_sorted_sublists):
+    filename1, filename2 = get_two_files(current_sorted_sublists)
+    new_merged_file = sort_two_sorted_files_into_one(filename1, filename2)
+    add_merged_results_to_list(current_sorted_sublists, new_merged_file)
+    delete_temp_file(filename1)
+    delete_temp_file(filename2)
+
+def get_two_files(current_sorted_sublists):
+    filename1 = current_sorted_sublists.pop()
+    filename2 = current_sorted_sublists.pop()
+    return filename1, filename2
+
+def add_merged_results_to_list(current_sorted_sublists, filename):
+    current_sorted_sublists.append(filename)
+
+def save_final_results(final_results_filename):
+    final_numbers = read_numbers_from_file(final_results_filename)
+    delete_temp_file(final_results_filename)
+    write_numbers_to_file("sorted.txt", final_numbers)
 
 # https://stackoverflow.com/questions/18262293/how-to-open-every-file-in-a-folder
 input_files = glob.glob("input/unsorted_*.txt")
