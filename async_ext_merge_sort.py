@@ -1,6 +1,7 @@
 import glob
 import uuid  # for temp filename generation
 import os
+import asyncio
 
 def sort_each_input_file_into_temp_files(input_file_list):
     sorted_input_files = []
@@ -48,8 +49,7 @@ def merge(list1, list2):
     while (j < len(list2)):
         merged_sorted_list.append(list2[j])
         j += 1
-    return merged_sorted_list
-    
+    return merged_sorted_list 
 
 def sort_two_sorted_files_into_one(filename1, filename2):   
     sorted_numbers1 = read_numbers_from_file(filename1)
@@ -65,32 +65,80 @@ def create_temp_filename():
 def delete_temp_file(filename):
     os.remove(filename)
 
-def sort(input_file_list):
+class CounterHolder:
+    def __init__(self):
+        self.lock = asyncio.Lock()
+        self.i = 0
+    async def increment(self, value = 1):
+        async with self.lock:
+            self.i += value
+    async def decrement(self):
+        async with self.lock:
+            print("task count decremented")
+            self.i -= 1
+    async def get(self):
+        async with self.lock:
+            return self.i
+
+async def dispatch_merging_tasks(current_sorted_sublists, current_sorted_sublists_lock, merge_done_sema, task_counter):
+    created_tasks = 0
+    sublists = await list_len_lock(current_sorted_sublists, current_sorted_sublists_lock)
+    while sublists > 1:
+        filename1, filename2 = await get_two_files_lock(current_sorted_sublists, current_sorted_sublists_lock)
+        asyncio.create_task(merge_two_lists_and_write_results(current_sorted_sublists, filename1, filename2, current_sorted_sublists_lock, merge_done_sema, task_counter))
+        created_tasks += 1
+        sublists = await list_len_lock(current_sorted_sublists, current_sorted_sublists_lock)
+    return created_tasks
+
+async def sort(input_file_list):
     current_sorted_sublists = sort_each_input_file_into_temp_files(input_file_list)
-    while len(current_sorted_sublists) > 1:
-        merge_two_lists_and_write_results(current_sorted_sublists)
+    current_sorted_sublists_lock = asyncio.Lock()
+    merge_done_sema = asyncio.Semaphore(0)
+    num_active_tasks = CounterHolder()
+    await num_active_tasks.increment(await dispatch_merging_tasks(current_sorted_sublists, current_sorted_sublists_lock, merge_done_sema, num_active_tasks))
+    tasks = await num_active_tasks.get()
+    sublists = await list_len_lock(current_sorted_sublists, current_sorted_sublists_lock)
+    while tasks > 0 or sublists > 1:
+        await merge_done_sema.acquire()
+        
+        await num_active_tasks.increment(await dispatch_merging_tasks(current_sorted_sublists, current_sorted_sublists_lock, merge_done_event, num_active_tasks))
+        tasks = await num_active_tasks.get()
+        sublists = await list_len_lock(current_sorted_sublists, current_sorted_sublists_lock)
+        
+    print(tasks)
+    print(sublists)
     save_final_results(current_sorted_sublists.pop())
 
-def merge_two_lists_and_write_results(current_sorted_sublists):
-    filename1, filename2 = get_two_files(current_sorted_sublists)
+
+async def merge_two_lists_and_write_results(current_sorted_sublists, filename1, filename2, lock, merge_done_sema, task_counter):
     new_merged_file = sort_two_sorted_files_into_one(filename1, filename2)
-    add_merged_results_to_list(current_sorted_sublists, new_merged_file)
     delete_temp_file(filename1)
     delete_temp_file(filename2)
+    await add_merged_results_to_list_lock(current_sorted_sublists, new_merged_file, lock)
+    
+    await task_counter.decrement()
+    merge_done_sema.release()
 
-def get_two_files(current_sorted_sublists):
-    filename1 = current_sorted_sublists.pop()
-    filename2 = current_sorted_sublists.pop()
-    return filename1, filename2
+async def list_len_lock(my_list, lock):
+    async with lock:
+        return len(my_list)
 
-def add_merged_results_to_list(current_sorted_sublists, filename):
-    current_sorted_sublists.append(filename)
+async def get_two_files_lock(files, lock):
+    async with lock:
+        filename1 = files.pop()
+        filename2 = files.pop()
+        return filename1, filename2
 
-def save_final_results(final_results_filename):
+async def add_merged_results_to_list_lock(current_sorted_sublists, filename, lock):
+    async with lock:
+        print("added results to list")
+        current_sorted_sublists.append(filename)
+
+async def save_final_results(final_results_filename):
     final_numbers = read_numbers_from_file(final_results_filename)
     delete_temp_file(final_results_filename)
     write_numbers_to_file("sorted.txt", final_numbers)
 
 # https://stackoverflow.com/questions/18262293/how-to-open-every-file-in-a-folder
 input_files = glob.glob("input/unsorted_*.txt")
-sort(input_files)
+asyncio.run(sort(input_files))
