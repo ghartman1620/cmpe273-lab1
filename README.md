@@ -3,9 +3,9 @@
 Lab 1 submission for Gabriel Hartman.
 
 Contains the following files:
-ext*merge_sort.py
+ext_merge_sort.py
 async_ext_merge_sort.py
-all unsorted*\*.txt files
+all input/unsorted_.txt files
 sorted.txt
 async_sorted.txt
 time.txt
